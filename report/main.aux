@@ -1,0 +1,81 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{sethy2020rice}
+\citation{salaic2023dataset}
+\citation{mohanty2016plant}
+\citation{singh2020plantdoc}
+\citation{yi2024mvmatch}
+\citation{he2016resnet}
+\citation{tan2019efficientnet}
+\citation{touvron2021deit}
+\citation{woebbecke1995color}
+\citation{meyer2008excessgreen}
+\citation{bera2024pndnet}
+\citation{arevalo2017gmu}
+\citation{hou2016emd}
+\citation{salaic2023dataset}
+\providecommand \oddpage@label [2]{}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{1}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}Task and Dataset}{1}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IV}RMOF-Net}{1}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {IV-}0a}End-to-end path.}{1}{paragraph.4.0.0.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Overview of \textsc  {RMOF-Net}\xspace  . A selected hierarchical CNN produces global and $2\!\times \!2$ regional features at two depths. A leaf-aware branch extracts explicit colour priors and learned texture from corresponding foreground regions. Region-wise cross-attention forms a shared representation for treatment classification and ordinal-score prediction. DeiT-Tiny is evaluated as a standalone transformer baseline; the Stage~3/4 implementation uses ResNet18 or EfficientNet-B0.}}{2}{figure.1}\protected@file@percent }
+\newlabel{fig:architecture}{{1}{2}{Overview of \rmofnet . A selected hierarchical CNN produces global and $2\!\times \!2$ regional features at two depths. A leaf-aware branch extracts explicit colour priors and learned texture from corresponding foreground regions. Region-wise cross-attention forms a shared representation for treatment classification and ordinal-score prediction. DeiT-Tiny is evaluated as a standalone transformer baseline; the Stage~3/4 implementation uses ResNet18 or EfficientNet-B0}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Multi-scale deep regions}{2}{subsection.4.1}\protected@file@percent }
+\newlabel{eq:deep-tokens}{{1}{2}{Multi-scale deep regions}{equation.4.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Leaf-aware colour encoding}{2}{subsection.4.2}\protected@file@percent }
+\newlabel{eq:colour-tokens}{{2}{2}{Leaf-aware colour encoding}{equation.4.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Region-wise fusion and ordinal learning}{2}{subsection.4.3}\protected@file@percent }
+\newlabel{eq:attention}{{3}{2}{Region-wise fusion and ordinal learning}{equation.4.3}{}}
+\citation{he2016resnet}
+\citation{tan2019efficientnet}
+\citation{touvron2021deit}
+\citation{deng2009imagenet}
+\citation{loshchilov2019adamw}
+\citation{guo2017calibration}
+\citation{selvaraju2017gradcam}
+\newlabel{eq:objective}{{5}{3}{Region-wise fusion and ordinal learning}{equation.4.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}Experimental Design}{3}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-}0a}Main comparison.}{3}{paragraph.5.0.0.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-}0b}Splits and preprocessing.}{3}{paragraph.5.0.0.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-}0c}Baselines and training.}{3}{paragraph.5.0.0.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-}0d}Metrics and comparisons.}{3}{paragraph.5.0.0.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-}0e}Planned result figures.}{3}{paragraph.5.0.0.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-}0f}Robustness and interpretation.}{3}{paragraph.5.0.0.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Limitations}{3}{section.6}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Ablation results for multi-scale regions, colour encoding, fusion, and ordinal supervision.}}{3}{figure.2}\protected@file@percent }
+\newlabel{fig:ablation-results}{{2}{3}{Ablation results for multi-scale regions, colour encoding, fusion, and ordinal supervision}{figure.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Confusion matrices, endpoint errors, and ordinal-score residuals.}}{3}{figure.3}\protected@file@percent }
+\newlabel{fig:error-results}{{3}{3}{Confusion matrices, endpoint errors, and ordinal-score residuals}{figure.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Performance by brightness, plant coverage, and acquisition group.}}{3}{figure.4}\protected@file@percent }
+\newlabel{fig:robustness-results}{{4}{3}{Performance by brightness, plant coverage, and acquisition group}{figure.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Macro-F1 against parameter count, latency, and peak memory.}}{3}{figure.5}\protected@file@percent }
+\newlabel{fig:efficiency-results}{{5}{3}{Macro-F1 against parameter count, latency, and peak memory}{figure.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Main comparison and component analysis. Def.-F1 evaluates $\{N0,N75\}$ against $NFull$. Ord.-MAE uses target scores $0,1,2$. All numerical cells are intentionally left blank until matched test runs are complete.}}{4}{table.1}\protected@file@percent }
+\newlabel{tab:main-results}{{I}{4}{Main comparison and component analysis. Def.-F1 evaluates $\{N0,N75\}$ against $NFull$. Ord.-MAE uses target scores $0,1,2$. All numerical cells are intentionally left blank until matched test runs are complete}{table.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Reproducibility and Decision Rules}{4}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Conclusion}{4}{section.8}\protected@file@percent }
+\bibstyle{IEEEtran}
+\bibdata{references}
+\bibcite{sethy2020rice}{1}
+\bibcite{salaic2023dataset}{2}
+\bibcite{mohanty2016plant}{3}
+\bibcite{singh2020plantdoc}{4}
+\bibcite{yi2024mvmatch}{5}
+\bibcite{he2016resnet}{6}
+\bibcite{tan2019efficientnet}{7}
+\bibcite{touvron2021deit}{8}
+\bibcite{woebbecke1995color}{9}
+\bibcite{meyer2008excessgreen}{10}
+\bibcite{bera2024pndnet}{11}
+\bibcite{arevalo2017gmu}{12}
+\bibcite{hou2016emd}{13}
+\bibcite{deng2009imagenet}{14}
+\bibcite{loshchilov2019adamw}{15}
+\bibcite{guo2017calibration}{16}
+\bibcite{selvaraju2017gradcam}{17}
+\@writefile{toc}{\contentsline {section}{References}{5}{section*.1}\protected@file@percent }
+\gdef \@abspage@last{5}

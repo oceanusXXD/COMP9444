@@ -1,0 +1,213 @@
+\documentclass[conference]{IEEEtran}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{latexsym}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{adjustbox}
+\usepackage[caption=false,font=footnotesize]{subfig}
+\usepackage{xspace}
+\usepackage{balance}
+\usepackage[hidelinks]{hyperref}
+
+\title{08--RMOF-Net for Maize Nitrogen Deficiency Detection and Treatment-Level Classification}
+
+\author{\IEEEauthorblockN{Xicheng Peng, Tao Zhong, Houjun Liu, Zixuan Shao, and He Zhu}
+\IEEEauthorblockA{z5526784, z5643577, z5461152, z5663409, z5696771}}
+
+\newcommand{\rmofnet}{\textsc{RMOF-Net}\xspace}
+\newcommand{\selectedcnn}{B^{\star}_{\mathrm{CNN}}}
+\newcommand{\pending}{--}
+\newcommand{\resultplot}[2]{%
+  \IfFileExists{#1}{%
+    \includegraphics[width=\linewidth,height=0.088\textheight,keepaspectratio]{#1}%
+  }{%
+    \begingroup
+    \setlength{\fboxsep}{0pt}%
+    \fbox{\begin{minipage}[c][0.088\textheight][c]{0.96\linewidth}
+      \centering\footnotesize\textbf{#2}\\[3pt]
+      \texttt{\detokenize{#1}}
+    \end{minipage}}%
+    \endgroup
+  }%
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Nitrogen fertilizer is one of the largest variable costs in maize production, yet excess application increases nitrate and nitrite loss to water and surrounding ecosystems. We study low-cost nitrogen-status recognition from field RGB images. The task combines image-level deficiency screening with classification among three ordered treatments: $N0$, $N75$, and $NFull$. We compare ImageNet-pretrained ResNet18, EfficientNet-B0, and DeiT-Tiny, then develop Region-aware Multi-scale Ordinal Fusion Network (\rmofnet). The model retains whole-plant context and local symptoms through global and regional features, combines explicit vegetation indices with learned leaf-colour texture, and aligns both branches using region-wise cross-attention. A classification head and an ordinal score head jointly model treatment identity and order. The evaluation is designed to isolate each component under duplicate-aware data splits and to report middle-class errors, robustness, and inference cost in addition to aggregate accuracy.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Maize nitrogen deficiency, RGB imaging, ordinal classification, multi-scale feature fusion, region-wise cross-attention, vegetation indices, precision agriculture.
+\end{IEEEkeywords}
+
+\section{Introduction}
+Nitrogen management must balance crop demand against fertilizer cost and environmental loss. Under-application limits growth, whereas excess fertilizer can leach from fields and damage natural ecosystems. Reliable diagnosis could support more precise field intervention, but laboratory measurements and specialist scouting are difficult to scale. RGB cameras provide a cheaper signal that can be collected without dedicated spectral hardware.
+
+Field RGB recognition is nevertheless difficult. Soil, residue, weeds, shadows, exposure, and plant coverage can correlate with the treatment label. Nitrogen stress may also appear as local chlorosis rather than a uniform colour shift. A model based only on global texture can dilute these symptoms, while a model based only on colour can mistake illumination or background for plant condition. Random image splits further risk placing near-duplicate views in both training and test sets.
+
+We therefore formulate detection as image-level screening of non-full-nitrogen plants and derive its score as $p(N0)+p(N75)$. Classification distinguishes $N0$, $N75$, and $NFull$; no object detector is implied because the dataset provides neither bounding boxes nor symptom masks. The labels also have a natural order, with $N75$ between the two endpoints.
+
+\rmofnet is built around this structure. A hierarchical CNN supplies Stage~3 and Stage~4 features, and a parallel leaf-aware branch describes explicit colour priors and learned local texture. Region-wise cross-attention decides where colour is informative. The main contributions are:
+\begin{itemize}
+  \item a global--regional, multi-scale representation that preserves whole-plant context and spatially limited symptoms;
+  \item a leaf-aware colour encoder that combines interpretable indices with learned texture through region-aligned cross-attention; and
+  \item joint three-class and ordinal learning, evaluated against ResNet18, EfficientNet-B0, and DeiT-Tiny with emphasis on the ambiguous $N75$ class.
+\end{itemize}
+
+\section{Related Work}
+CNNs have been used for nutrient-stress recognition in rice and maize \cite{sethy2020rice,salaic2023dataset}, but field backgrounds and acquisition shifts remain important failure modes \cite{mohanty2016plant,singh2020plantdoc,yi2024mvmatch}. ResNet18 and EfficientNet-B0 provide efficient hierarchical CNN baselines \cite{he2016resnet,tan2019efficientnet}; DeiT-Tiny tests whether a compact transformer offers a stronger global representation \cite{touvron2021deit}.
+
+Colour indices such as Excess Green provide interpretable vegetation cues \cite{woebbecke1995color,meyer2008excessgreen}, while regional aggregation can retain local nutrient symptoms that global pooling suppresses \cite{bera2024pndnet}. Fixed indices remain sensitive to illumination, and learned encoders can absorb camera or soil shortcuts. \rmofnet uses both, but allows each deep region to retrieve only relevant colour tokens. This is more expressive than an image-level multimodal gate \cite{arevalo2017gmu}. Squared Earth Mover's Distance (EMD) supplies the ordered geometry between treatment labels \cite{hou2016emd}.
+
+\section{Task and Dataset}
+We use the \emph{Nitrogen Deficiency in Maize} RGB classification dataset \cite{salaic2023dataset}, distributed as a 489\,MB archive through \href{https://data.mendeley.com/datasets/g7xnn2bm4g/1}{Mendeley Data (version 1)}. Images depict maize grown under $N0$, $N75$, and $NFull$ application levels. The archive supports image classification; it does not provide boxes, masks, or pixel-level symptom labels. We will report class counts, corrupted files, and exact and perceptual duplicates after auditing the extracted archive.
+
+For an image $x\in\mathbb{R}^{H\times W\times3}$, the class target is $y\in\{0,1,2\}$ for $N0$, $N75$, and $NFull$, respectively. The same integer defines ordinal treatment score $s=y\in[0,2]$. This score records treatment order and must not be interpreted as tissue nitrogen, SPAD, yield, or a continuous physiological measurement.
+
+\section{RMOF-Net}
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/rmof_overview.png}
+  \caption{Overview of \rmofnet. A selected hierarchical CNN produces global and $2\!\times\!2$ regional features at two depths. A leaf-aware branch extracts explicit colour priors and learned texture from corresponding foreground regions. Region-wise cross-attention forms a shared representation for treatment classification and ordinal-score prediction. DeiT-Tiny is evaluated as a standalone transformer baseline; the Stage~3/4 implementation uses ResNet18 or EfficientNet-B0.}
+  \label{fig:architecture}
+\end{figure*}
+
+\paragraph{End-to-end path.}
+For an input RGB image $x$, \rmofnet constructs two aligned token streams before making a prediction. The deep stream contains $D_3$ and $D_4$ from two CNN depths, while the colour stream contains $C$ from the masked RGB image. In every stream, token $r=0$ represents the whole image and tokens $r=1,\ldots,4$ represent the same four cells of a $2\times2$ grid. This shared indexing lets the fusion block compare a deep region with its corresponding colour region. The fused tokens are summarized as $z$, which is sent to both prediction heads. At inference, the class is $\hat{y}=\arg\max_j p_j$, image-level deficiency is $p_0+p_1$, and the auxiliary output $\hat{s}$ provides an ordered treatment score rather than a second class decision.
+
+\subsection{Multi-scale deep regions}
+We first compare the three pretrained baselines under the same split and tuning budget. The hierarchical backbone for \rmofnet is selected between ResNet18 and EfficientNet-B0 using validation Macro-F1; DeiT-Tiny remains a standalone baseline because its token sequence does not expose the same CNN stage hierarchy. Let $F_3$ and $F_4$ denote the selected CNN's feature maps at output strides 16 and 32. For each scale $l$, adaptive pooling produces one global token and $R=4$ tokens on a $2\times2$ grid:
+\begin{equation}
+D_l=P_l[\operatorname{GAP}(F_l);\operatorname{RP}_{2\times2}(F_l)]
+\in\mathbb{R}^{(R+1)\times d}.
+\label{eq:deep-tokens}
+\end{equation}
+Stage~3 retains finer chlorotic patterns; Stage~4 provides stronger semantic context. Projection $P_l$ maps both scales to the same token dimension $d$.
+
+\subsection{Leaf-aware colour encoding}
+A soft foreground prior reduces contributions from soil and residue without requiring every leaf to remain green. Let $u=\operatorname{LSE}(\widetilde{\operatorname{ExG}},\widetilde S,\widetilde b^{*})$ combine standardized ExG, HSV saturation, and the yellow--blue Lab channel, where LSE denotes log-sum-exp. We set $m=\sigma(\gamma(u-\tau))$, where threshold $\tau$ is estimated on training images only and slope $\gamma$ is tuned on validation data. This soft union allows chlorotic yellow tissue to contribute. Within each grid cell and the global region, explicit descriptor $a_r$ contains robust statistics of HSV, Lab, ExG, ExGR, and NGRDI values. All statistics are standardized using training-set parameters.
+
+A shallow convolutional encoder $\phi$ complements these moments with colour boundaries, mottling, and local texture:
+\begin{equation}
+t_r=\operatorname{Pool}_{r}(\phi(x\odot m)),\qquad
+C_r=W_c[a_r;t_r].
+\label{eq:colour-tokens}
+\end{equation}
+The resulting colour sequence $C\in\mathbb{R}^{(R+1)\times d}$ follows the same global--regional layout as the deep tokens.
+
+\subsection{Region-wise fusion and ordinal learning}
+Deep tokens query the colour sequence independently at each scale:
+\begin{align}
+A_l&=\operatorname{softmax}\!\left(
+  \frac{D_lW_l^Q(CW^K)^\top}{\sqrt d}+B_l\right),\nonumber\\
+H_l&=\operatorname{LN}\!\left(D_l+A_lCW^V\right).
+\label{eq:attention}
+\end{align}
+Alignment bias $B_l$ favours corresponding cells without preventing a query from using global colour context. In contrast to a scalar gate, this operation can emphasize a yellowing leaf region while suppressing a shadowed cell. Global tokens and mean regional tokens from $H_3$ and $H_4$ are concatenated into representation $z$.
+
+In Eq.~\ref{eq:attention}, each row of $A_l$ is a distribution over colour tokens for one deep token. The diagonal part of $B_l$ gives the matching cell a spatial prior, while the learned dot products can override that prior when another region contains more useful evidence. Thus the model can use a colour cue locally without forcing the same colour weight on the whole image.
+
+The class head predicts $p=\operatorname{softmax}(W_pz+b_p)$, and the auxiliary head predicts $\hat{s}=2\sigma(w_s^\top z+b_s)$. For one-hot class target $q$, the ordered loss is
+\begin{equation}
+\mathcal{L}_{\mathrm{ord}}=\frac{1}{K-1}\sum_{k=0}^{K-2}
+\left(\sum_{j=0}^{k}p_j-\sum_{j=0}^{k}q_j\right)^2.
+\end{equation}
+We optimize
+\begin{equation}
+\mathcal{L}=\mathcal{L}_{\mathrm{CE}}+
+\lambda_o\mathcal{L}_{\mathrm{ord}}+
+\lambda_r\operatorname{SmoothL1}(\hat{s},s).
+\label{eq:objective}
+\end{equation}
+Cross-entropy learns treatment identity, $\mathcal{L}_{\mathrm{ord}}$ penalizes violations of the class order, and Smooth L1 keeps the predicted score close to $s$. EMD therefore penalizes $N0\leftrightarrow NFull$ errors more than adjacent errors, while the score head encourages an ordered shared representation without replacing the classification head.
+
+\section{Experimental Design}
+\paragraph{Main comparison.}
+Table~\ref{tab:main-results} defines the main reporting layout for the three baselines and the RMOF-Net component analysis. Its cells remain blank until the corresponding experiments are completed.
+\begin{table*}[!t]
+\centering
+\caption{Main comparison and component analysis. Def.-F1 evaluates $\{N0,N75\}$ against $NFull$. Ord.-MAE uses target scores $0,1,2$. All numerical cells are intentionally left blank until matched test runs are complete.}
+\label{tab:main-results}
+\setlength{\tabcolsep}{3.0pt}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lccccccccc}
+\toprule
+Method & Def.-F1$\uparrow$ & Acc.$\uparrow$ & Macro-F1$\uparrow$ & $F1_{N0}\uparrow$ & $F1_{N75}\uparrow$ & $F1_{NFull}\uparrow$ & Ord.-MAE$\downarrow$ & Params$\downarrow$ & Latency$\downarrow$ \\
+\midrule
+ResNet18 \cite{he2016resnet} & \pending & \pending & \pending & \pending & \pending & \pending & \pending & \pending & \pending \\
+EfficientNet-B0 \cite{tan2019efficientnet} & \pending & \pending & \pending & \pending & \pending & \pending & \pending & \pending \\
+DeiT-Tiny \cite{touvron2021deit} & \pending & \pending & \pending & \pending & \pending & \pending & \pending & \pending \\
+\midrule
+$\selectedcnn$ + multi-scale regions & \pending & \pending & \pending & \pending & \pending & \pending & \pending & \pending & \pending \\
+\quad + explicit colour priors & \pending & \pending & \pending & \pending & \pending & \pending & \pending & \pending & \pending \\
+\quad + learned colour texture & \pending & \pending & \pending & \pending & \pending & \pending & \pending & \pending & \pending \\
+\quad + scalar fusion gate & \pending & \pending & \pending & \pending & \pending & \pending & \pending & \pending & \pending \\
+\textbf{Full \rmofnet} & \pending & \pending & \pending & \pending & \pending & \pending & \pending & \pending & \pending \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table*}
+\paragraph{Splits and preprocessing.}
+Where plot, acquisition sequence, or genotype identifiers are available, all images from one group stay in one partition. Otherwise, we use a duplicate-aware stratified 70/15/15 split and remove cross-partition near-duplicates. A conventional random split is reported only as a leakage diagnostic. Inputs are resized to $224\times224$ and normalized with ImageNet statistics \cite{deng2009imagenet}. Horizontal flips, small rotations and crops, and mild brightness/contrast jitter are applied consistently to all trainable models.
+
+\paragraph{Baselines and training.}
+The three baselines use their standard ImageNet-pretrained classifiers. Every model receives the same split files, seed set, early-stopping rule, and random-search budget. AdamW with cosine decay is used throughout \cite{loshchilov2019adamw}; search ranges cover learning rate, weight decay, batch size, and dropout. \rmofnet additionally tunes token width, mask slope, attention heads, and $\lambda_o,\lambda_r$. Final reporting will include the selected configuration, seed count, GPU, training time, and mean$\pm$standard deviation.
+
+\paragraph{Metrics and comparisons.}
+Macro-F1 is primary because it weights all treatments equally. We also report deficiency F1, accuracy, balanced accuracy, per-class F1, ordinal MAE, endpoint-confusion count, calibration error \cite{guo2017calibration}, parameter count, and batch-one latency. The main analysis asks whether full \rmofnet improves $F1_{N75}$ and reduces endpoint errors relative to the strongest baseline. Ablations compare ExG-only and composite foreground masks, then add multi-scale regions, explicit priors, learned texture, fusion, EMD, and score regression one at a time. Direct concatenation, scalar gating, unrestricted attention, and region-aligned attention distinguish the value of the proposed fusion rule.
+
+\paragraph{Planned result figures.}
+The four analyses are reported as separate figures. Figure~\ref{fig:ablation-results} will show the change in Macro-F1, $F1_{N75}$, and ordinal MAE as components are added. Figure~\ref{fig:error-results} will show confusion matrices, endpoint errors, and ordinal-score residuals. Figure~\ref{fig:robustness-results} will show performance by brightness, plant coverage, and acquisition group, while Figure~\ref{fig:efficiency-results} will show the accuracy--cost trade-off. The corresponding numeric values remain blank until matched test runs are complete.
+
+\begin{figure}[!b]
+  \centering
+  \resultplot{figures/ablation_results.pdf}{Reserved for ablation data}
+  \caption{Ablation results for multi-scale regions, colour encoding, fusion, and ordinal supervision.}
+  \label{fig:ablation-results}
+\end{figure}
+
+\begin{figure}[!b]
+  \centering
+  \resultplot{figures/confusion_analysis.pdf}{Reserved for error-analysis data}
+  \caption{Confusion matrices, endpoint errors, and ordinal-score residuals.}
+  \label{fig:error-results}
+\end{figure}
+
+\begin{figure}[!b]
+  \centering
+  \resultplot{figures/robustness_results.pdf}{Reserved for robustness data}
+  \caption{Performance by brightness, plant coverage, and acquisition group.}
+  \label{fig:robustness-results}
+\end{figure}
+
+\begin{figure}[!b]
+  \centering
+  \resultplot{figures/efficiency_results.pdf}{Reserved for efficiency data}
+  \caption{Macro-F1 against parameter count, latency, and peak memory.}
+  \label{fig:efficiency-results}
+\end{figure}
+
+\paragraph{Robustness and interpretation.}
+Results are stratified by brightness and foreground coverage, plus genotype or acquisition group when metadata permit. We compare Grad-CAM regions \cite{selvaraju2017gradcam}, foreground masks, and cross-attention weights on correct and incorrect predictions. These visualizations test whether the model uses leaves rather than soil or capture artifacts; they are diagnostics rather than causal explanations.
+
+\balance
+\section{Limitations}
+Treatment labels are proxies for nitrogen status, not direct physiological measurements. The ordinal head therefore learns application-level order rather than a calibrated nitrogen concentration. RGB colour varies with cameras, illumination, growth stage, and genotype, and a colour-derived foreground mask can include weeds or fail under senescence. The dataset cannot establish cross-farm deployment performance without external validation. Fertilizer recommendations would require field trials linked to tissue nitrogen, yield, weather, and soil measurements.
+
+\section{Reproducibility and Decision Rules}
+The final release will store a split manifest containing each file path, label, checksum, available acquisition group, and duplicate-cluster identifier. Foreground thresholds, feature standardization, and all model choices are fitted on training and validation data only. Table~\ref{tab:main-results} will report at least three matched seeds for every method. The held-out test set is evaluated only after the backbone, module design, and hyperparameters have been fixed.
+
+Paired bootstrap intervals are computed over test groups, or over images when no grouping metadata exist. We will describe \rmofnet as an improvement only when the Macro-F1 difference is positive with a 95\% interval excluding zero, $F1_{N75}$ does not decrease, and endpoint confusions do not increase. Batch-one latency uses the same accelerator, precision, input pipeline, warm-up, and timed repetitions for every model; median latency, peak memory, and trainable parameter count are reported together. These rules prevent a small average gain from hiding instability, middle-class regression, or an impractical compute increase.
+
+\section{Conclusion}
+\rmofnet targets maize nitrogen deficiency recognition by combining multi-scale deep regions, explicit and learned leaf-colour evidence, region-wise cross-attention, and ordered joint learning. The evaluation compares three compact pretrained baselines and isolates the contribution of each component. Its central test is whether local colour-aware fusion improves the difficult $N75$ class and reduces severe endpoint errors under duplicate-aware evaluation.
+
+\clearpage
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+\end{document}
