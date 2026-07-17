@@ -5,7 +5,14 @@ __pycache__/
 .venv/
 venv/
 
-# Local dataset and generated training artifacts
+# Local dataset
 Nitrogen deficiency in maize annotated image classification dataset/
+
+# Ignore all experiment outputs except the selected final run
+outputs/*
+!outputs/lr_3e-5_mild_seed42/
+!outputs/lr_3e-5_mild_seed42/**
+
+# Never upload model weights
 *.pt
 *.pth

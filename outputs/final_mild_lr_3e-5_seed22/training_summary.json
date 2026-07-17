@@ -1,7 +1,0 @@
-{
-  "best_val_macro_f1": 0.7200876913419286,
-  "epochs_completed": 24,
-  "training_seconds": 477.87826810000115,
-  "parameter_count": 5524995,
-  "trainable_parameter_count": 5524995
-}
