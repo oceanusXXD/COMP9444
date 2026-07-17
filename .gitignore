@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.tmp/
+.venv/
+venv/
+
+# Local dataset and generated training artifacts
+Nitrogen deficiency in maize annotated image classification dataset/
+*.pt
+*.pth
