@@ -290,11 +290,239 @@ N0,0.7833333333333333,0.21666666666666667,0.0
 N75,0.23333333333333334,0.5333333333333333,0.23333333333333334
 NFull,0.03333333333333333,0.23333333333333334,0.7333333333333333
 
+#### seed 2
+```powershell
+python train_deit.py --seed 2 --augmentation mild --learning-rate 3e-5 --epochs 50 --warmup-epochs 5 --patience 8 --output-dir "outputs/final_mild_lr_3e-5_seed2"
+```
+
+| 实际完成 epochs | 19 |
+| 最佳 epoch | 11 |
+| Early Stopping 是否触发 | YES |
+| 最佳 epoch 的 train loss | 0.5368 |
+| 最佳 epoch 的 train accuracy | 0.8583 |
+| 最佳 epoch 的 validation loss | 0.8484 |
+| 最佳 epoch 的 validation macro f1 | 0.6828 |
+| 最终 epoch 的 train loss | 0.3696 |
+| 最终 epoch 的 train accuracy | 0.9619 |
+| 最终 epoch 的 validation loss | 1.0530 |
+| 最终 epoch 的 validation macro f1 | 0.6438 |
+
+| 指标 | 总体 | N0 | N75 | NFull |
+|---|---:|---:|---:|---:|
+| Precision | N/A | 0.8421052631578947 | 0.6052631578947368 | 0.6470588235294118 |
+| Recall | N/A | 0.8 | 0.38333333333333336 | 0.9166666666666666 |
+| F1 | N/A | 0.8205128205128205 | 0.46938775510204084 | 0.7586206896551724 |
+| Support | 180 | 60 | 60 | 60 |
+
+Validation 混淆矩阵（行是真实类别，列是预测类别）：
+,N0,N75,NFull
+N0,0.8,0.16666666666666666,0.03333333333333333
+N75,0.15,0.38333333333333336,0.4666666666666667
+NFull,0.0,0.08333333333333333,0.9166666666666666
+
+#### seed 82
+```powershell
+python train_deit.py --seed 82 --augmentation mild --learning-rate 3e-5 --epochs 50 --warmup-epochs 5 --patience 8 --output-dir "outputs/final_mild_lr_3e-5_seed82"
+```
+
+| 实际完成 epochs | 41 |
+| 最佳 epoch | 33 |
+| Early Stopping 是否触发 | YES |
+| 最佳 epoch 的 train loss | 0.2976 |
+| 最佳 epoch 的 train accuracy | 0.9988 |
+| 最佳 epoch 的 validation loss | 0.9479 |
+| 最佳 epoch 的 validation macro f1 | 0.7268 |
+| 最终 epoch 的 train loss | 0.2991 |
+| 最终 epoch 的 train accuracy | 0.9976 |
+| 最终 epoch 的 validation loss | 1.0276 |
+| 最终 epoch 的 validation macro f1 | 0.6974 |
+
+| 指标 | 总体 | N0 | N75 | NFull |
+|---|---:|---:|---:|---:|
+| Precision | N/A | 0.8208955223880597 | 0.6274509803921569 | 0.7258064516129032 |
+| Recall | N/A | 0.9166666666666666 | 0.5333333333333333 | 0.75 |
+| F1 | N/A | 0.8661417322834646 | 0.5765765765765766 | 0.7377049180327869 |
+| Support | 180 | 60 | 60 | 60 |
+
+Validation 混淆矩阵（行是真实类别，列是预测类别）：
+,N0,N75,NFull
+N0,0.9166666666666666,0.08333333333333333,0.0
+N75,0.18333333333333332,0.5333333333333333,0.2833333333333333
+NFull,0.016666666666666666,0.23333333333333334,0.75
+
+#### seed 100
+```powershell
+python train_deit.py --seed 100 --augmentation mild --learning-rate 3e-5 --epochs 50 --warmup-epochs 5 --patience 8 --output-dir "outputs/final_mild_lr_3e-5_seed100"
+```
+
+| 实际完成 epochs | 50 |
+| 最佳 epoch | 44 |
+| Early Stopping 是否触发 | NO |
+| 最佳 epoch 的 train loss | 0.2957 |
+| 最佳 epoch 的 train accuracy | 0.9988 |
+| 最佳 epoch 的 validation loss | 0.9976 |
+| 最佳 epoch 的 validation macro f1 | 0.7452 |
+| 最终 epoch 的 train loss | 0.2929 |
+| 最终 epoch 的 train accuracy | 1.0000 |
+| 最终 epoch 的 validation loss | 0.9955 |
+| 最终 epoch 的 validation macro f1 | 0.7177 |
+
+| 指标 | 总体 | N0 | N75 | NFull |
+|---|---:|---:|---:|---:|
+| Precision | N/A | 0.8771929824561403 | 0.6166666666666667 | 0.746031746031746 |
+| Recall | N/A | 0.8333333333333334 | 0.6166666666666667 | 0.7833333333333333 |
+| F1 | N/A | 0.8547008547008547 | 0.6166666666666667 | 0.7642276422764228 |
+| Support | 180 | 60 | 60 | 60 |
+
+Validation 混淆矩阵（行是真实类别，列是预测类别）：
+,N0,N75,NFull
+N0,0.8333333333333334,0.16666666666666666,0.0
+N75,0.11666666666666667,0.6166666666666667,0.26666666666666666
+NFull,0.0,0.21666666666666667,0.7833333333333333
+
+#### seed 2026
+```powershell
+python train_deit.py --seed 2026 --augmentation mild --learning-rate 3e-5 --epochs 50 --warmup-epochs 5 --patience 8 --output-dir "outputs/final_mild_lr_3e-5_seed2026"
+```
+| 实际完成 epochs | 26 |
+| 最佳 epoch | 18 |
+| Early Stopping 是否触发 | YES |
+| 最佳 epoch 的 train loss | 0.3597 |
+| 最佳 epoch 的 train accuracy | 0.9643 |
+| 最佳 epoch 的 validation loss | 1.0891 |
+| 最佳 epoch 的 validation macro f1 | 0.6642 |
+| 最终 epoch 的 train loss | 0.3252 |
+| 最终 epoch 的 train accuracy | 0.9845 |
+| 最终 epoch 的 validation loss | 1.0987 |
+| 最终 epoch 的 validation macro f1 | 0.6484 |
+
+| 指标 | 总体 | N0 | N75 | NFull |
+|---|---:|---:|---:|---:|
+| Precision | N/A | 0.7142857142857143 | 0.5272727272727272 | 0.7708333333333334 |
+| Recall | N/A | 0.9166666666666666 | 0.48333333333333334 | 0.6166666666666667 |
+| F1 | N/A | 0.8029197080291971 | 0.5043478260869565 | 0.6851851851851852 |
+| Support | 180 | 60 | 60 | 60 |
+
+Validation 混淆矩阵（行是真实类别，列是预测类别）：
+,N0,N75,NFull
+N0,0.9166666666666666,0.08333333333333333,0.0
+N75,0.3333333333333333,0.48333333333333334,0.18333333333333332
+NFull,0.03333333333333333,0.35,0.6166666666666667
+
+#### seed 9444
+```powershell
+python train_deit.py --seed 9444 --augmentation mild --learning-rate 3e-5 --epochs 50 --warmup-epochs 5 --patience 8 --output-dir "outputs/final_mild_lr_3e-5_seed9444"
+```
+| 实际完成 epochs | 30 |
+| 最佳 epoch | 22 |
+| Early Stopping 是否触发 | YES |
+| 最佳 epoch 的 train loss | 0.3420 |
+| 最佳 epoch 的 train accuracy | 0.9762 |
+| 最佳 epoch 的 validation loss | 0.8354 |
+| 最佳 epoch 的 validation macro f1 | 0.7338 |
+| 最终 epoch 的 train loss | 0.3014 |
+| 最终 epoch 的 train accuracy | 0.9976 |
+| 最终 epoch 的 validation loss | 0.9998 |
+| 最终 epoch 的 validation macro f1 | 0.7031 |
+
+| 指标 | 总体 | N0 | N75 | NFull |
+|---|---:|---:|---:|---:|
+| Precision | N/A | 0.8333333333333334 | 0.5733333333333334 | 0.8431372549019608 |
+| Recall | N/A | 0.75 | 0.7166666666666667 | 0.7166666666666667 |
+| F1 | N/A | 0.7894736842105263 | 0.6370370370370371 | 0.7747747747747747 |
+| Support | 180 | 60 | 60 | 60 |
+
+Validation 混淆矩阵（行是真实类别，列是预测类别）：
+,N0,N75,NFull
+N0,0.75,0.25,0.0
+N75,0.15,0.7166666666666667,0.13333333333333333
+NFull,0.0,0.2833333333333333,0.7166666666666667
+
+#### seed 150 *wait*
+```powershell
+python train_deit.py --seed 150 --augmentation mild --learning-rate 3e-5 --epochs 50 --warmup-epochs 5 --patience 8 --output-dir "outputs/final_mild_lr_3e-5_seed150"
+```
+| 实际完成 epochs | 26 |
+| 最佳 epoch | 18 |
+| Early Stopping 是否触发 | YES |
+| 最佳 epoch 的 train loss | 0.3597 |
+| 最佳 epoch 的 train accuracy | 0.9643 |
+| 最佳 epoch 的 validation loss | 1.0891 |
+| 最佳 epoch 的 validation macro f1 | 0.6642 |
+| 最终 epoch 的 train loss | 0.3252 |
+| 最终 epoch 的 train accuracy | 0.9845 |
+| 最终 epoch 的 validation loss | 1.0987 |
+| 最终 epoch 的 validation macro f1 | 0.6484 |
+
+| 指标 | 总体 | N0 | N75 | NFull |
+|---|---:|---:|---:|---:|
+| Precision | N/A | 0.7142857142857143 | 0.5272727272727272 | 0.7708333333333334 |
+| Recall | N/A | 0.9166666666666666 | 0.48333333333333334 | 0.6166666666666667 |
+| F1 | N/A | 0.8029197080291971 | 0.5043478260869565 | 0.6851851851851852 |
+| Support | 180 | 60 | 60 | 60 |
+
+Validation 混淆矩阵（行是真实类别，列是预测类别）：
+
+#### seed 200 *wait*
+```powershell
+python train_deit.py --seed 200 --augmentation mild --learning-rate 3e-5 --epochs 50 --warmup-epochs 5 --patience 8 --output-dir "outputs/final_mild_lr_3e-5_seed200"
+```
+| 实际完成 epochs | 26 |
+| 最佳 epoch | 18 |
+| Early Stopping 是否触发 | YES |
+| 最佳 epoch 的 train loss | 0.3597 |
+| 最佳 epoch 的 train accuracy | 0.9643 |
+| 最佳 epoch 的 validation loss | 1.0891 |
+| 最佳 epoch 的 validation macro f1 | 0.6642 |
+| 最终 epoch 的 train loss | 0.3252 |
+| 最终 epoch 的 train accuracy | 0.9845 |
+| 最终 epoch 的 validation loss | 1.0987 |
+| 最终 epoch 的 validation macro f1 | 0.6484 |
+
+| 指标 | 总体 | N0 | N75 | NFull |
+|---|---:|---:|---:|---:|
+| Precision | N/A | 0.7142857142857143 | 0.5272727272727272 | 0.7708333333333334 |
+| Recall | N/A | 0.9166666666666666 | 0.48333333333333334 | 0.6166666666666667 |
+| F1 | N/A | 0.8029197080291971 | 0.5043478260869565 | 0.6851851851851852 |
+| Support | 180 | 60 | 60 | 60 |
+
+Validation 混淆矩阵（行是真实类别，列是预测类别）：
+
+#### seed 500
+```powershell
+python train_deit.py --seed 500 --augmentation mild --learning-rate 3e-5 --epochs 50 --warmup-epochs 5 --patience 8 --output-dir "outputs/final_mild_lr_3e-5_seed500"
+```
+| 实际完成 epochs | 26 |
+| 最佳 epoch | 18 |
+| Early Stopping 是否触发 | YES |
+| 最佳 epoch 的 train loss | 0.3597 |
+| 最佳 epoch 的 train accuracy | 0.9643 |
+| 最佳 epoch 的 validation loss | 1.0891 |
+| 最佳 epoch 的 validation macro f1 | 0.6642 |
+| 最终 epoch 的 train loss | 0.3252 |
+| 最终 epoch 的 train accuracy | 0.9845 |
+| 最终 epoch 的 validation loss | 1.0987 |
+| 最终 epoch 的 validation macro f1 | 0.6484 |
+
+| 指标 | 总体 | N0 | N75 | NFull |
+|---|---:|---:|---:|---:|
+| Precision | N/A | 0.7727272727272727 | 0.5681818181818182 | 0.6857142857142857 |
+| Recall | N/A | 0.85 | 0.4166666666666667 | 0.8 |
+| F1 | N/A | 0.8095238095238095 | 0.4807692307692308 | 0.7384615384615385 |
+| Support | 180 | 60 | 60 | 60 |
+
+Validation 混淆矩阵（行是真实类别，列是预测类别）：
+,N0,N75,NFull
+N0,0.85,0.13333333333333333,0.016666666666666666
+N75,0.23333333333333334,0.4166666666666667,0.35
+NFull,0.016666666666666666,0.18333333333333332,0.8
+
+
 ### 0.5 阶段四：配置锁定后评估 Test
 
 对三个种子的最佳 checkpoint 分别执行一次。`$SEED42_DIR` 必须指向阶段一或
 阶段二中被选为最终配置的 seed 42 输出目录。
-#### seed 42 test
+#### seed 42 test 0.7444
 ```powershell
 python train_deit.py --evaluate-only --checkpoint "outputs/lr_3e-5_mild_seed42/best_checkpoint.pt" --eval-split test --output-dir "outputs/lr_3e-5_mild_seed42"
 ```
@@ -305,7 +533,7 @@ train  280  280    280
 val     60   60     60
 test: accuracy=0.7444, balanced_accuracy=0.7444, macro_f1=0.7430, level_mae=0.2556
 
-#### seed 22 test
+#### seed 22 test 0.7056
 ```powershell
 python train_deit.py --evaluate-only --checkpoint "outputs/final_mild_lr_3e-5_seed22/best_checkpoint.pt" --eval-split test --output-dir "outputs/final_mild_lr_3e-5_seed22"
 ```
@@ -316,7 +544,7 @@ train  280  280    280
 val     60   60     60
 test: accuracy=0.7056, balanced_accuracy=0.7056, macro_f1=0.7032, level_mae=0.2944
 
-#### seed 62 test
+#### seed 62 test 0.7389
 ```powershell
 python train_deit.py --evaluate-only --checkpoint "outputs/final_mild_lr_3e-5_seed62/best_checkpoint.pt" --eval-split test --output-dir "outputs/final_mild_lr_3e-5_seed62"
 ```
@@ -327,7 +555,95 @@ train  280  280    280
 val     60   60     60
 test: accuracy=0.7389, balanced_accuracy=0.7389, macro_f1=0.7383, level_mae=0.2667
 
-## 1. 结果汇总
+#### seed 2 test 0.6778
+```powershell
+python train_deit.py --evaluate-only --checkpoint "outputs/final_mild_lr_3e-5_seed2/best_checkpoint.pt" --eval-split test --output-dir "outputs/final_mild_lr_3e-5_seed2"
+```
+label   N0  N75  NFull
+split
+test    60   60     60
+train  280  280    280
+val     60   60     60
+test: accuracy=0.6778, balanced_accuracy=0.6778, macro_f1=0.6539, level_mae=0.3278
+
+#### seed 2026 test 0.6500
+```powershell
+python train_deit.py --evaluate-only --checkpoint "outputs/final_mild_lr_3e-5_seed2026/best_checkpoint.pt" --eval-split test --output-dir "outputs/final_mild_lr_3e-5_seed2026"
+```
+label   N0  N75  NFull
+split
+test    60   60     60
+train  280  280    280
+val     60   60     60
+test: accuracy=0.6500, balanced_accuracy=0.6500, macro_f1=0.6317, level_mae=0.3500
+
+#### seed 9444 test 0.7111
+```powershell
+python train_deit.py --evaluate-only --checkpoint "outputs/final_mild_lr_3e-5_seed9444/best_checkpoint.pt" --eval-split test --output-dir "outputs/final_mild_lr_3e-5_seed9444"
+```
+label   N0  N75  NFull
+split
+test    60   60     60
+train  280  280    280
+val     60   60     60
+test: accuracy=0.7111, balanced_accuracy=0.7111, macro_f1=0.7163, level_mae=0.2889
+
+#### seed 82 test 0.7333
+```powershell
+python train_deit.py --evaluate-only --checkpoint "outputs/final_mild_lr_3e-5_seed82/best_checkpoint.pt" --eval-split test --output-dir "outputs/final_mild_lr_3e-5_seed82"
+```
+label   N0  N75  NFull
+split
+test    60   60     60
+train  280  280    280
+val     60   60     60
+test: accuracy=0.7333, balanced_accuracy=0.7333, macro_f1=0.7322, level_mae=0.2722
+
+#### seed 100 test 0.7333
+```powershell
+python train_deit.py --evaluate-only --checkpoint "outputs/final_mild_lr_3e-5_seed100/best_checkpoint.pt" --eval-split test --output-dir "outputs/final_mild_lr_3e-5_seed100"
+```
+label   N0  N75  NFull
+split
+test    60   60     60
+train  280  280    280
+val     60   60     60
+test: accuracy=0.7333, balanced_accuracy=0.7333, macro_f1=0.7360, level_mae=0.2667
+
+#### seed 150 test 0.7111
+```powershell
+python train_deit.py --evaluate-only --checkpoint "outputs/final_mild_lr_3e-5_seed150/best_checkpoint.pt" --eval-split test --output-dir "outputs/final_mild_lr_3e-5_seed150"
+```
+label   N0  N75  NFull
+split
+test    60   60     60
+train  280  280    280
+val     60   60     60
+test: accuracy=0.7111, balanced_accuracy=0.7111, macro_f1=0.7002, level_mae=0.2889
+
+#### seed 200 test 0.7111
+```powershell
+python train_deit.py --evaluate-only --checkpoint "outputs/final_mild_lr_3e-5_seed200/best_checkpoint.pt" --eval-split test --output-dir "outputs/final_mild_lr_3e-5_seed200"
+```
+label   N0  N75  NFull
+split
+test    60   60     60
+train  280  280    280
+val     60   60     60
+test: accuracy=0.7111, balanced_accuracy=0.7111, macro_f1=0.7099, level_mae=0.2944
+
+#### seed 500 test 0.6389
+```powershell
+python train_deit.py --evaluate-only --checkpoint "outputs/final_mild_lr_3e-5_seed500/best_checkpoint.pt" --eval-split test --output-dir "outputs/final_mild_lr_3e-5_seed500"
+```
+label   N0  N75  NFull
+split
+test    60   60     60
+train  280  280    280
+val     60   60     60
+test: accuracy=0.6389, balanced_accuracy=0.6389, macro_f1=0.6302, level_mae=0.3667
+
+## 1. 结果汇总 0716
 最终配置固定为 DeiT-Tiny、Mild augmentation、学习率 `3e-5`、weight decay
 `1e-2`、dropout `0.1` 和 label smoothing `0.1`。三个随机种子的 Test 结果如下：
 
