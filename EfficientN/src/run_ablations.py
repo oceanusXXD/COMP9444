@@ -25,7 +25,7 @@ SUITES = {
         ("deit_tiny", "deit_tiny", "cnn_baseline"),
     ],
     "main": [
-        ("cnn_baseline", "rmof_efficientnet", "cnn_baseline"),
+        ("cnn_baseline", "efficientnet_b0", "cnn_baseline"),
         ("multiscale", "rmof_efficientnet", "multiscale"),
         ("regions", "rmof_efficientnet", "regions"),
         ("color_stats", "rmof_efficientnet", "color_stats"),
@@ -59,7 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--patience", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--num-workers", type=int, default=4)
-    parser.add_argument("--augmentation", choices=["mild", "leaf", "strong"], default="mild")
+    parser.add_argument("--augmentation", choices=["mild", "leaf", "strong"], default="leaf")
     parser.add_argument("--train-fraction", type=float, default=1.0)
     parser.add_argument("--pretrained", action="store_true")
     parser.add_argument("--device", default=None)

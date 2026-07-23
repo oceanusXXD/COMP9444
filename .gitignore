@@ -1,2 +1,75 @@
-EfficientN/Images
-EfficientN/report10_amp_outputs
+# Local OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python caches / build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+.venv/
+.venv-*/
+venv/
+env/
+
+# Tool caches
+.matplotlib/
+.torch/
+
+# Data directories and archives
+data/
+Data/
+datasets/
+Datasets/
+Images/
+EfficientN/Images/
+archives/
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# Model checkpoints / trained weights
+models/
+Models/
+checkpoints/
+weights/
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.pkl
+*.pickle
+*.joblib
+
+# Generated experiment outputs
+outputs/
+results/
+runs/
+wandb/
+mlruns/
+EfficientN/optimized_algorithm_outputs*/
+EfficientN/report10_amp_outputs/
+three_baselines_outputs/
+
+# Keep source, reports, configs, and notebooks tracked by default.

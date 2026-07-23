@@ -26,6 +26,7 @@ from torch.utils.data import DataLoader
 from torchvision import models
 
 from rmof_data import (
+    ASPECT_FILL,
     IMAGENET_MEAN,
     IMAGENET_STD,
     make_loaders,
@@ -37,6 +38,9 @@ from rmof_metrics import metrics_from_predictions, save_confusion
 class ModelConfig:
     token_dim: int = 128
     dropout: float = 0.30
+    # A bounded residual prevents a small labelled set from overriding the
+    # validated EfficientNet logits with a high-variance correction.
+    residual_logit_limit: Optional[float] = None
     use_stage3: bool = True
     use_stage4: bool = True
     use_region_tokens: bool = True
@@ -96,6 +100,17 @@ def preset_config(name: str) -> ModelConfig:
         ),
         "region_cross_attention": dict(fusion="region_attention"),
         "ordinal_supervision": dict(fusion="region_attention"),
+        "low_resource": dict(
+            token_dim=64,
+            dropout=0.40,
+            residual_logit_limit=1.5,
+            use_stage3=True,
+            use_stage4=True,
+            use_region_tokens=True,
+            use_color_stats=True,
+            use_color_texture=False,
+            fusion="region_attention",
+        ),
         "fusion_concat": dict(fusion="concat"),
         "fusion_gate": dict(fusion="gate"),
         "fusion_cross_attention": dict(fusion="cross_attention"),
@@ -113,6 +128,7 @@ def preset_config(name: str) -> ModelConfig:
 def loss_weights_for_preset(name: str) -> Tuple[float, float]:
     weights = {
         "ordinal_supervision": (0.25, 0.25),
+        "low_resource": (0.25, 0.25),
         "loss_ce": (0.0, 0.0),
         "loss_ce_emd": (0.25, 0.0),
         "loss_ce_score": (0.0, 0.25),
@@ -127,7 +143,8 @@ def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 
 class SpatialTokenExtractor(nn.Module):
@@ -185,15 +202,24 @@ def rgb_to_lab(rgb: torch.Tensor) -> torch.Tensor:
 
 
 class SoftForegroundMask(nn.Module):
+    """Differentiable vegetation mask that excludes deterministic fill pixels."""
+
     def __init__(self) -> None:
         super().__init__()
-        self.threshold = nn.Parameter(torch.tensor(-0.03))
+        self.threshold = nn.Parameter(torch.tensor(0.0))
         self.log_sharpness = nn.Parameter(torch.tensor(12.0))
+        self.register_buffer(
+            "aspect_fill",
+            torch.tensor(ASPECT_FILL, dtype=torch.float32).view(1, 3, 1, 1) / 255.0,
+        )
 
     def forward(self, rgb: torch.Tensor) -> torch.Tensor:
         exg = 2.0 * rgb[:, 1:2] - rgb[:, 0:1] - rgb[:, 2:3]
         sharpness = F.softplus(self.log_sharpness)
-        return torch.sigmoid(sharpness * (exg - self.threshold))
+        vegetation = torch.sigmoid(sharpness * (exg - self.threshold))
+        aspect_padding = (rgb - self.aspect_fill).abs().amax(dim=1, keepdim=True) < (0.5 / 255.0)
+        affine_padding = rgb.amax(dim=1, keepdim=True) < (0.5 / 255.0)
+        return vegetation.masked_fill(aspect_padding | affine_padding, 0.0)
 
 
 def weighted_region_statistics(
@@ -255,10 +281,18 @@ class ColourBranch(nn.Module):
             tokens.append(self.stats_project(weighted_region_statistics(features, mask, regions)))
         if self.use_texture:
             texture = self.texture(rgb * mask)
+            texture_mask = F.interpolate(mask, size=texture.shape[-2:], mode="area")
+
+            def pool_texture(grid: int) -> torch.Tensor:
+                denominator = F.adaptive_avg_pool2d(texture_mask, grid).clamp_min(1e-5)
+                return (
+                    F.adaptive_avg_pool2d(texture * texture_mask, grid) / denominator
+                ).flatten(2).transpose(1, 2)
+
             token_grid = 2 if regions else 1
-            local = F.adaptive_avg_pool2d(texture, token_grid).flatten(2).transpose(1, 2)
+            local = pool_texture(token_grid)
             if regions:
-                global_token = F.adaptive_avg_pool2d(texture, 1).flatten(2).transpose(1, 2)
+                global_token = pool_texture(1)
                 local = torch.cat((global_token, local), dim=1)
             tokens.append(self.texture_project(local))
         return tokens[0] if len(tokens) == 1 else self.merge(torch.cat(tokens, dim=-1))
@@ -341,9 +375,9 @@ class EfficientNetColourFusion(nn.Module):
         backbone = models.efficientnet_b0(weights=weights)
         self.features = backbone.features
         self.avgpool = backbone.avgpool
-        backbone.classifier[1] = nn.Sequential(
-            nn.Dropout(p=config.dropout, inplace=True),
-            nn.Linear(backbone.classifier[1].in_features, config.num_classes),
+        backbone.classifier[0] = nn.Dropout(p=config.dropout, inplace=True)
+        backbone.classifier[1] = nn.Linear(
+            backbone.classifier[1].in_features, config.num_classes
         )
         self.base_classifier = backbone.classifier
         self.stage3_tokens = SpatialTokenExtractor(112, config.token_dim)
@@ -387,6 +421,10 @@ class EfficientNetColourFusion(nn.Module):
         for module in (self.features, self.base_classifier):
             module.requires_grad_(False)
             module.eval()
+        if not self.config.use_stage3:
+            self.stage3_tokens.requires_grad_(False)
+        if not self.config.use_stage4:
+            self.stage4_tokens.requires_grad_(False)
         if self.config.fusion == "colour_residual":
             # These deep-token modules are intentionally bypassed by the
             # low-capacity colour-only correction.
@@ -447,6 +485,9 @@ class EfficientNetColourFusion(nn.Module):
             else:
                 raise ValueError(f"Unknown fusion mode: {self.config.fusion}")
         aux_logits = self.aux_classifier(fused)
+        if self.config.residual_logit_limit is not None:
+            limit = self.config.residual_logit_limit
+            aux_logits = limit * torch.tanh(aux_logits / limit)
         return {
             "logits": base_logits + aux_logits,
             "base_logits": base_logits,
@@ -487,10 +528,8 @@ def build_baseline_model(
     if model_name == "efficientnet_b0":
         weights = models.EfficientNet_B0_Weights.DEFAULT if pretrained else None
         model = models.efficientnet_b0(weights=weights)
-        model.classifier[1] = nn.Sequential(
-            nn.Dropout(p=config.dropout, inplace=True),
-            nn.Linear(model.classifier[1].in_features, config.num_classes),
-        )
+        model.classifier[0] = nn.Dropout(p=config.dropout, inplace=True)
+        model.classifier[1] = nn.Linear(model.classifier[1].in_features, config.num_classes)
         return ClassifierWrapper(model)
     if model_name == "resnet18":
         weights = models.ResNet18_Weights.DEFAULT if pretrained else None
@@ -529,6 +568,8 @@ def load_frozen_efficientnet_base(
             mapped["features." + key.removeprefix("model.features.")] = value
         elif key.startswith("model.classifier."):
             mapped["base_classifier." + key.removeprefix("model.classifier.")] = value
+        elif key.startswith("classifier."):
+            mapped["base_classifier." + key.removeprefix("classifier.")] = value
         elif key.startswith("features.") or key.startswith("base_classifier."):
             mapped[key] = value
     if not mapped:
@@ -541,6 +582,8 @@ def load_frozen_efficientnet_base(
 
 
 class OrdinalLoss(nn.Module):
+    """Classify treatment level while directly penalizing ordinal score error."""
+
     def __init__(self, emd_weight: float, score_weight: float, label_smoothing: float = 0.0) -> None:
         super().__init__()
         self.cross_entropy = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
@@ -551,16 +594,28 @@ class OrdinalLoss(nn.Module):
         logits = output["logits"]
         ce = self.cross_entropy(logits, target)
         probabilities = logits.softmax(dim=1)
-        one_hot = F.one_hot(target, num_classes=logits.shape[1]).float()
-        emd = (probabilities.cumsum(dim=1) - one_hot.cumsum(dim=1)).square().mean()
+        one_hot = F.one_hot(target, num_classes=logits.shape[1]).to(probabilities.dtype)
+        cumulative_error = probabilities.cumsum(dim=1)[:, :-1] - one_hot.cumsum(dim=1)[:, :-1]
+        emd = cumulative_error.square().mean()
         score = output["score"]
-        if self.score_weight and score is None:
-            raise ValueError("Score regression was selected but this baseline has no score head")
-        score_loss = (
-            F.smooth_l1_loss(score.squeeze(1), target.float()) if score is not None else ce.new_zeros(())
+        class_values = torch.arange(logits.shape[1], device=logits.device, dtype=probabilities.dtype)
+        logit_score = (probabilities * class_values).sum(dim=1)
+        logit_score_loss = F.smooth_l1_loss(logit_score, target.to(probabilities.dtype))
+        head_score_loss = (
+            F.smooth_l1_loss(score.squeeze(1), target.to(score.dtype))
+            if score is not None
+            else ce.new_zeros(())
         )
+        score_loss = 0.5 * (head_score_loss + logit_score_loss) if score is not None else logit_score_loss
         total = ce + self.emd_weight * emd + self.score_weight * score_loss
-        return {"total": total, "ce": ce, "emd": emd, "score": score_loss}
+        return {
+            "total": total,
+            "ce": ce,
+            "emd": emd,
+            "score": score_loss,
+            "score_head": head_score_loss,
+            "score_logits": logit_score_loss,
+        }
 
 
 def evaluate(
@@ -610,6 +665,7 @@ def train_one_epoch(
     optimizer: torch.optim.Optimizer,
     scaler: torch.amp.GradScaler,
     amp_enabled: bool,
+    grad_clip_norm: Optional[float],
 ) -> Dict[str, float]:
     model.train()
     if isinstance(model, EfficientNetColourFusion) and model.base_frozen:
@@ -628,6 +684,9 @@ def train_one_epoch(
             output = model(images)
             losses = objective(output, target)
         scaler.scale(losses["total"]).backward()
+        if grad_clip_norm is not None and grad_clip_norm > 0.0:
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_norm)
         scaler.step(optimizer)
         scaler.update()
         total_loss += losses["total"].item() * target.shape[0]
@@ -639,6 +698,10 @@ def train_one_epoch(
 
 
 def parameter_count(model: nn.Module) -> int:
+    return sum(parameter.numel() for parameter in model.parameters())
+
+
+def trainable_parameter_count(model: nn.Module) -> int:
     return sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
 
 
@@ -670,7 +733,9 @@ def make_optimizer(model: nn.Module, args: argparse.Namespace) -> torch.optim.Op
 def run_training(args: argparse.Namespace, config: ModelConfig, emd_weight: float, score_weight: float) -> Path:
     set_seed(args.seed)
     device = torch.device(args.device)
-    train_loader, validation_loader, test_loader = make_loaders(args)
+    train_loader, validation_loader, test_loader = make_loaders(
+        args, include_test=not args.validation_only
+    )
     model = build_model(args.model, config, args.pretrained).to(device)
     if args.base_checkpoint is not None:
         if not isinstance(model, EfficientNetColourFusion):
@@ -680,11 +745,15 @@ def run_training(args: argparse.Namespace, config: ModelConfig, emd_weight: floa
     optimizer = make_optimizer(model, args)
     amp_enabled = args.amp and device.type == "cuda"
     scaler = torch.amp.GradScaler(device.type, enabled=amp_enabled)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
+    scheduler_horizon = args.lr_schedule_horizon or args.epochs
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=max(1, scheduler_horizon)
+    )
     output_dir = Path(args.output_dir) / args.experiment_name / f"seed_{args.seed}"
     output_dir.mkdir(parents=True, exist_ok=True)
     best_state = copy.deepcopy(model.state_dict())
     best_f1 = -float("inf")
+    best_epoch = 0
     stale_epochs = 0
     history: List[Dict[str, float]] = []
     if args.base_checkpoint is not None:
@@ -695,7 +764,14 @@ def run_training(args: argparse.Namespace, config: ModelConfig, emd_weight: floa
         print(f"epoch 000: frozen baseline val macro-F1={best_f1:.4f}")
     for epoch in range(1, args.epochs + 1):
         train_metrics = train_one_epoch(
-            model, train_loader, device, objective, optimizer, scaler, amp_enabled
+            model,
+            train_loader,
+            device,
+            objective,
+            optimizer,
+            scaler,
+            amp_enabled,
+            args.grad_clip_norm,
         )
         val_metrics, _, _, _, _ = evaluate(
             model, validation_loader, device, objective, amp_enabled
@@ -714,9 +790,10 @@ def run_training(args: argparse.Namespace, config: ModelConfig, emd_weight: floa
             f"epoch {epoch:03d}: train loss={train_metrics['loss']:.4f}, "
             f"val macro-F1={val_metrics['macro_f1']:.4f}"
         )
-        if val_metrics["macro_f1"] > best_f1:
+        if val_metrics["macro_f1"] > best_f1 + args.early_stopping_min_delta:
             best_f1 = val_metrics["macro_f1"]
             best_state = copy.deepcopy(model.state_dict())
+            best_epoch = epoch
             stale_epochs = 0
         else:
             stale_epochs += 1
@@ -724,47 +801,144 @@ def run_training(args: argparse.Namespace, config: ModelConfig, emd_weight: floa
                 print(f"early stopping after epoch {epoch}")
                 break
     model.load_state_dict(best_state)
+    validation_metrics, validation_cm, validation_labels, validation_predictions, validation_names = evaluate(
+        model, validation_loader, device, objective, amp_enabled
+    )
+    run_metadata = {
+        "seed": args.seed,
+        "experiment": args.experiment_name,
+        "model": args.model,
+        "parameters": parameter_count(model),
+        "trainable_parameters": trainable_parameter_count(model),
+        "best_validation_macro_f1": best_f1,
+        "best_epoch": best_epoch,
+        "completed_epochs": len(history),
+        "emd_weight": emd_weight,
+        "score_weight": score_weight,
+        "base_checkpoint": args.base_checkpoint,
+        "training_config": {
+            "epochs": args.epochs,
+            "lr_schedule_horizon": scheduler_horizon,
+            "patience": args.patience,
+            "early_stopping_min_delta": args.early_stopping_min_delta,
+            "batch_size": args.batch_size,
+            "train_samples": len(train_loader.dataset),
+            "validation_samples": len(validation_loader.dataset),
+            "augmentation": args.augmentation,
+            "train_fraction": args.train_fraction,
+            "learning_rate": args.learning_rate,
+            "backbone_lr_scale": args.backbone_lr_scale,
+            "weight_decay": args.weight_decay,
+            "label_smoothing": args.label_smoothing,
+            "dropout": config.dropout,
+            "amp": amp_enabled,
+            "cache_images": args.cache_images,
+            "aspect_pad": args.aspect_pad,
+            "image_size": args.image_size,
+            "grad_clip_norm": args.grad_clip_norm,
+        },
+    }
+    validation_metrics.update(run_metadata)
+    with (output_dir / "validation_metrics.json").open("w", encoding="utf-8") as handle:
+        json.dump(validation_metrics, handle, indent=2)
+    pd.DataFrame(
+        {"filename": validation_names, "label": validation_labels, "prediction": validation_predictions}
+    ).to_csv(output_dir / "validation_predictions.csv", index=False)
+    np.save(output_dir / "validation_confusion.npy", validation_cm)
+    save_confusion(
+        validation_cm,
+        output_dir / "validation_confusion_matrix.png",
+        f"{args.experiment_name}, seed {args.seed} validation",
+    )
+    pd.DataFrame(history).to_csv(output_dir / "history.csv", index=False)
+    torch.save(
+        {
+            "state_dict": model.state_dict(),
+            "model_config": asdict(config),
+            "validation_metrics": validation_metrics,
+            "emd_weight": emd_weight,
+            "score_weight": score_weight,
+            "label_smoothing": args.label_smoothing,
+        },
+        output_dir / "best_model.pt",
+    )
+    if args.validation_only:
+        print(json.dumps(validation_metrics, indent=2))
+        return output_dir
+
+    if test_loader is None:
+        raise RuntimeError("Test loader was not created for final evaluation")
     test_metrics, cm, labels, predictions, names = evaluate(
         model, test_loader, device, objective, amp_enabled
     )
-    test_metrics.update(
-        {
-            "seed": args.seed,
-            "experiment": args.experiment_name,
-            "model": args.model,
-            "parameters": parameter_count(model),
-            "best_validation_macro_f1": best_f1,
-            "emd_weight": emd_weight,
-            "score_weight": score_weight,
-            "base_checkpoint": args.base_checkpoint,
-            "training_config": {
-                "epochs": args.epochs,
-                "batch_size": args.batch_size,
-                "augmentation": args.augmentation,
-                "train_fraction": args.train_fraction,
-                "learning_rate": args.learning_rate,
-                "backbone_lr_scale": args.backbone_lr_scale,
-                "weight_decay": args.weight_decay,
-                "label_smoothing": args.label_smoothing,
-                "dropout": config.dropout,
-                "amp": amp_enabled,
-                "cache_images": args.cache_images,
-            },
-        }
-    )
+    test_metrics.update(run_metadata)
     with (output_dir / "metrics.json").open("w", encoding="utf-8") as handle:
         json.dump(test_metrics, handle, indent=2)
-    pd.DataFrame(history).to_csv(output_dir / "history.csv", index=False)
     pd.DataFrame({"filename": names, "label": labels, "prediction": predictions}).to_csv(
         output_dir / "predictions.csv", index=False
     )
     np.save(output_dir / "confusion.npy", cm)
     save_confusion(cm, output_dir / "confusion_matrix.png", f"{args.experiment_name}, seed {args.seed}")
-    torch.save(
-        {"state_dict": model.state_dict(), "model_config": asdict(config), "metrics": test_metrics},
-        output_dir / "best_model.pt",
-    )
     print(json.dumps(test_metrics, indent=2))
+    return output_dir
+
+
+def evaluate_saved_checkpoint(args: argparse.Namespace) -> Path:
+    """Evaluate one validation-selected checkpoint once on the held-out test split."""
+    checkpoint_path = Path(args.evaluate_checkpoint)
+    if not checkpoint_path.is_file():
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    if "model_config" not in checkpoint or "state_dict" not in checkpoint:
+        raise ValueError(f"Checkpoint is missing model configuration or weights: {checkpoint_path}")
+    config = ModelConfig(**checkpoint["model_config"])
+    model = build_model(args.model, config, pretrained=False)
+    incompatible = model.load_state_dict(checkpoint["state_dict"], strict=False)
+    allowed_missing = {"colour.mask.aspect_fill"}
+    if set(incompatible.missing_keys).difference(allowed_missing) or incompatible.unexpected_keys:
+        raise ValueError(
+            "Checkpoint is incompatible with the selected model: "
+            f"missing={incompatible.missing_keys}, unexpected={incompatible.unexpected_keys}"
+        )
+    device = torch.device(args.device)
+    model.to(device)
+    training_config = checkpoint.get("validation_metrics", {}).get("training_config", {})
+    for field in ("image_size", "augmentation", "cache_images", "aspect_pad", "amp"):
+        if field in training_config:
+            setattr(args, field, training_config[field])
+    _, _, test_loader = make_loaders(args, include_test=True)
+    if test_loader is None:
+        raise RuntimeError("Test loader was not created for checkpoint evaluation")
+    objective = OrdinalLoss(
+        float(checkpoint.get("emd_weight", 0.0)),
+        float(checkpoint.get("score_weight", 0.0)),
+        float(checkpoint.get("label_smoothing", 0.0)),
+    )
+    amp_enabled = args.amp and device.type == "cuda"
+    metrics, cm, labels, predictions, names = evaluate(model, test_loader, device, objective, amp_enabled)
+    validation_metrics = checkpoint.get("validation_metrics", {})
+    metrics.update(
+        {
+            "seed": validation_metrics.get("seed", args.seed),
+            "experiment": validation_metrics.get("experiment", args.experiment_name),
+            "model": args.model,
+            "parameters": parameter_count(model),
+            "trainable_parameters": validation_metrics.get(
+                "trainable_parameters", trainable_parameter_count(model)
+            ),
+            "best_validation_macro_f1": validation_metrics.get("best_validation_macro_f1"),
+            "checkpoint": str(checkpoint_path),
+        }
+    )
+    output_dir = checkpoint_path.parent
+    with (output_dir / "metrics.json").open("w", encoding="utf-8") as handle:
+        json.dump(metrics, handle, indent=2)
+    pd.DataFrame({"filename": names, "label": labels, "prediction": predictions}).to_csv(
+        output_dir / "predictions.csv", index=False
+    )
+    np.save(output_dir / "confusion.npy", cm)
+    save_confusion(cm, output_dir / "confusion_matrix.png", f"{metrics['experiment']}, test")
+    print(json.dumps(metrics, indent=2))
     return output_dir
 
 
@@ -806,7 +980,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--preset", default="safe_deep_residual", choices=[
         "cnn_baseline", "safe_deep_residual", "multiscale", "regions", "color_stats", "color_texture",
         "safe_colour_residual",
-        "region_cross_attention", "ordinal_supervision", "fusion_concat", "fusion_gate",
+        "region_cross_attention", "ordinal_supervision", "low_resource", "fusion_concat", "fusion_gate",
         "fusion_cross_attention", "fusion_region_attention", "loss_ce", "loss_ce_emd",
         "loss_ce_score", "loss_ce_emd_score",
     ])
@@ -816,11 +990,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pretrained", action="store_true")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument(
+        "--lr-schedule-horizon",
+        type=int,
+        default=None,
+        help="Cosine LR schedule horizon. Defaults to --epochs; use only to reproduce a truncated run.",
+    )
     parser.add_argument("--patience", type=int, default=5)
+    parser.add_argument(
+        "--early-stopping-min-delta",
+        type=float,
+        default=0.0,
+        help="Minimum validation Macro-F1 gain required to replace the best checkpoint.",
+    )
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--num-workers", type=int, default=2)
     parser.add_argument("--image-size", type=int, default=224)
-    parser.add_argument("--augmentation", choices=["mild", "leaf", "strong"], default="mild")
+    parser.add_argument("--augmentation", choices=["mild", "leaf", "strong"], default="leaf")
     parser.add_argument("--train-fraction", type=float, default=1.0)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
@@ -839,6 +1025,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--cache-images", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--grad-clip-norm",
+        type=float,
+        default=1.0,
+        help="Maximum gradient norm; set to 0 to disable clipping.",
+    )
+    parser.add_argument(
+        "--aspect-pad",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Preserve aspect ratio and pad inputs instead of stretching them.",
+    )
+    parser.add_argument(
+        "--validation-only",
+        action="store_true",
+        help="Select a checkpoint using validation data without reading the test split.",
+    )
+    parser.add_argument(
+        "--evaluate-checkpoint",
+        default=None,
+        help="Evaluate an already selected checkpoint once on the held-out test split.",
+    )
     parser.add_argument("--emd-weight", type=float, default=None)
     parser.add_argument("--score-weight", type=float, default=None)
     parser.add_argument("--smoke-check", action="store_true")
@@ -853,9 +1061,23 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.grad_clip_norm < 0.0:
+        raise ValueError("--grad-clip-norm must be non-negative")
+    if args.lr_schedule_horizon is not None and args.lr_schedule_horizon <= 0:
+        raise ValueError("--lr-schedule-horizon must be positive")
+    if args.early_stopping_min_delta < 0.0:
+        raise ValueError("--early-stopping-min-delta must be non-negative")
     if args.smoke_check:
         smoke_check(torch.device(args.device))
         return
+    if args.evaluate_checkpoint is not None:
+        evaluate_saved_checkpoint(args)
+        return
+    if args.model == "rmof_efficientnet" and args.preset == "cnn_baseline":
+        raise ValueError(
+            "cnn_baseline is an isolated EfficientNet baseline; use "
+            "--model efficientnet_b0 or --preset safe_deep_residual for RMOF-Net."
+        )
     config = preset_config(args.preset)
     for field in ("use_stage3", "use_stage4", "use_region_tokens", "use_color_stats", "use_color_texture"):
         value = getattr(args, field)

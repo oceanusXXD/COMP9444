@@ -63,6 +63,27 @@ python src/rmof_efficientnet.py --preset safe_deep_residual --pretrained --epoch
   --csv split_40_10_50.csv
 ```
 
+The previous full RMOF curve peaks on validation at epoch 7 and then overfits.
+Use this capped run for the optimized algorithm: it retains all 480 training
+images, performs exactly seven epochs, and selects the epoch-7-or-earlier
+checkpoint using validation data only. The schedule horizon preserves the
+learning-rate trajectory of the validated epoch-7 checkpoint while avoiding
+the remaining training epochs.
+
+```bash
+python3 src/rmof_efficientnet.py --preset ordinal_supervision --base-checkpoint \
+  ../three_baselines_outputs/B0_Base/seed_42/best_model.pt --epochs 7 \
+  --lr-schedule-horizon 25 --patience 7 --learning-rate 5e-4 \
+  --weight-decay 1e-2 --label-smoothing 0.05 --dropout 0.2 \
+  --augmentation mild --train-fraction 1.0 --batch-size 16 --validation-only \
+  --experiment-name full_rmof_7e_mild_lr5e4_h25 \
+  --output-dir optimized_algorithm_outputs_v3 \
+  --csv split_40_10_50.csv
+```
+
+The `low_resource` preset remains available for separate reduced-label
+experiments, but it is not part of this full-data short-epoch run.
+
 On the current seed-42, plot-disjoint 40/10/50 split, the 10-epoch
 EfficientNet-B0 baseline obtains test Macro-F1 `0.6594`. The tested residual
 variants do not exceed that score; use the ablation table in

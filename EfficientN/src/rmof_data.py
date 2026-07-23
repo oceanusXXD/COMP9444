@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -17,6 +17,35 @@ from torchvision import transforms
 CLASS_NAMES = ("N0", "N75", "NFull")
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
+ASPECT_FILL = (124, 116, 104)
+
+
+class AspectResizePad:
+    """Resize without distortion, then pad to a fixed square canvas."""
+
+    def __init__(
+        self,
+        height: int,
+        width: int,
+        fill: Tuple[int, int, int] = ASPECT_FILL,
+    ) -> None:
+        self.height = height
+        self.width = width
+        self.fill = fill
+
+    def __call__(self, image: Image.Image) -> Image.Image:
+        width, height = image.size
+        scale = min(self.width / width, self.height / height)
+        resized = image.resize(
+            (max(1, round(width * scale)), max(1, round(height * scale))),
+            Image.Resampling.BILINEAR,
+        )
+        canvas = Image.new("RGB", (self.width, self.height), self.fill)
+        canvas.paste(
+            resized,
+            ((self.width - resized.width) // 2, (self.height - resized.height) // 2),
+        )
+        return canvas
 
 
 class MaizeDataset(Dataset):
@@ -32,6 +61,7 @@ class MaizeDataset(Dataset):
         seed: int = 42,
         cache_images: bool = False,
         image_size: int = 224,
+        aspect_pad: bool = False,
     ) -> None:
         frame = pd.read_csv(csv_path)
         required = {"filepath", "filename", "label_index", "split"}
@@ -63,6 +93,7 @@ class MaizeDataset(Dataset):
         self.transform = transform
         self.cache_images = cache_images
         self.image_size = image_size
+        self.aspect_pad = aspect_pad
         self._image_cache: Dict[int, Image.Image] = {}
 
     def __len__(self) -> int:
@@ -82,31 +113,41 @@ class MaizeDataset(Dataset):
             with Image.open(image_path) as opened:
                 image = opened.convert("RGB")
             if self.cache_images:
-                image = image.resize(
-                    (self.image_size, self.image_size), Image.Resampling.BILINEAR
-                )
+                if self.aspect_pad:
+                    image = AspectResizePad(self.image_size, self.image_size)(image)
+                else:
+                    image = image.resize(
+                        (self.image_size, self.image_size), Image.Resampling.BILINEAR
+                    )
                 self._image_cache[index] = image.copy()
         return self.transform(image), int(row.label_index), str(row.filename)
 
 
 def build_transforms(
-    image_size: int, augmentation: str, images_pre_resized: bool = False
+    image_size: int,
+    augmentation: str,
+    images_pre_resized: bool = False,
+    aspect_pad: bool = False,
 ) -> Tuple[transforms.Compose, transforms.Compose]:
     """Build ImageNet-normalized train and evaluation transforms."""
     normalise = transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD)
     train_steps: list[object] = [transforms.RandomHorizontalFlip()]
     if not images_pre_resized:
-        train_steps.insert(0, transforms.Resize((image_size, image_size)))
+        resize = AspectResizePad(image_size, image_size) if aspect_pad else transforms.Resize((image_size, image_size))
+        train_steps.insert(0, resize)
     if augmentation == "strong":
         train_steps.extend(
-            (transforms.RandomVerticalFlip(p=0.2), transforms.RandomRotation(15))
+            (transforms.RandomVerticalFlip(p=0.2), transforms.RandomRotation(15, fill=ASPECT_FILL))
         )
     elif augmentation == "leaf":
         train_steps.extend(
             (
-                transforms.RandomRotation(8),
+                transforms.RandomRotation(8, fill=ASPECT_FILL),
                 transforms.RandomAffine(
-                    degrees=0, translate=(0.05, 0.05), scale=(0.9, 1.1)
+                    degrees=0,
+                    translate=(0.05, 0.05),
+                    scale=(0.9, 1.1),
+                    fill=ASPECT_FILL,
                 ),
             )
         )
@@ -114,11 +155,14 @@ def build_transforms(
 
     eval_steps: list[object] = [transforms.ToTensor(), normalise]
     if not images_pre_resized:
-        eval_steps.insert(0, transforms.Resize((image_size, image_size)))
+        resize = AspectResizePad(image_size, image_size) if aspect_pad else transforms.Resize((image_size, image_size))
+        eval_steps.insert(0, resize)
     return transforms.Compose(train_steps), transforms.Compose(eval_steps)
 
 
-def make_loaders(args: argparse.Namespace) -> Tuple[DataLoader, DataLoader, DataLoader]:
+def make_loaders(
+    args: argparse.Namespace, include_test: bool = True
+) -> Tuple[DataLoader, DataLoader, Optional[DataLoader]]:
     """Create train, validation, and test loaders from the experiment arguments."""
     csv_path = Path(args.csv)
     if not csv_path.is_file():
@@ -126,7 +170,10 @@ def make_loaders(args: argparse.Namespace) -> Tuple[DataLoader, DataLoader, Data
 
     cache_images = getattr(args, "cache_images", False)
     train_transform, eval_transform = build_transforms(
-        args.image_size, args.augmentation, images_pre_resized=cache_images
+        args.image_size,
+        args.augmentation,
+        images_pre_resized=cache_images,
+        aspect_pad=getattr(args, "aspect_pad", False),
     )
     splits = set(pd.read_csv(csv_path)["split"].unique())
     validation_split = "val" if "val" in splits else "test"
@@ -160,6 +207,7 @@ def make_loaders(args: argparse.Namespace) -> Tuple[DataLoader, DataLoader, Data
             args.seed,
             cache_images,
             args.image_size,
+            getattr(args, "aspect_pad", False),
         ),
         shuffle=True,
         generator=train_generator,
@@ -173,18 +221,22 @@ def make_loaders(args: argparse.Namespace) -> Tuple[DataLoader, DataLoader, Data
             eval_transform,
             cache_images=cache_images,
             image_size=args.image_size,
+            aspect_pad=getattr(args, "aspect_pad", False),
         ),
         **evaluation_options,
     )
-    test = DataLoader(
-        MaizeDataset(
-            csv_path,
-            root,
-            test_split,
-            eval_transform,
-            cache_images=cache_images,
-            image_size=args.image_size,
-        ),
-        **evaluation_options,
-    )
+    test = None
+    if include_test:
+        test = DataLoader(
+            MaizeDataset(
+                csv_path,
+                root,
+                test_split,
+                eval_transform,
+                cache_images=cache_images,
+                image_size=args.image_size,
+                aspect_pad=getattr(args, "aspect_pad", False),
+            ),
+            **evaluation_options,
+        )
     return train, validation, test
